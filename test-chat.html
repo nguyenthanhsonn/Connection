@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chat Test Client</title>
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <style>
+        body { font-family: sans-serif; display: flex; flex-direction: column; height: 100vh; margin: 0; background: #f0f2f5; }
+        .setup { padding: 20px; background: white; border-bottom: 1px solid #ddd; }
+        .setup input { padding: 8px; margin: 5px; width: 300px; }
+        .chat-container { flex: 1; display: flex; flex-direction: column; overflow: hidden; padding: 20px; }
+        #messages { flex: 1; overflow-y: auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-bottom: 20px; }
+        .message { margin-bottom: 10px; padding: 8px 12px; border-radius: 18px; max-width: 70%; }
+        .message.received { background: #e4e6eb; align-self: flex-start; }
+        .message.sent { background: #0084ff; color: white; align-self: flex-end; }
+        .controls { display: flex; gap: 10px; }
+        .controls input { flex: 1; padding: 12px; border-radius: 20px; border: 1px solid #ddd; outline: none; }
+        .controls button { padding: 10px 20px; border-radius: 20px; border: none; background: #0084ff; color: white; cursor: pointer; }
+        .status { font-size: 0.8em; margin-top: 5px; }
+    </style>
+</head>
+<body>
+    <div class="setup">
+        <h3>1. Authentication & Setup</h3>
+        <input type="text" id="token" placeholder="Paste JWT Token here">
+        <input type="number" id="roomId" placeholder="Target Room ID">
+        <button onclick="connect()">Connect</button>
+        <div id="status" class="status">Status: Disconnected</div>
+    </div>
+
+    <div class="chat-container">
+        <div id="messages"></div>
+        <div class="controls">
+            <input type="text" id="msgInput" placeholder="Type a message..." onkeypress="if(event.key==='Enter') sendMessage()">
+            <button onclick="sendMessage()">Send</button>
+        </div>
+    </div>
+
+    <script>
+        let socket;
+        const statusDiv = document.getElementById('status');
+        const messagesDiv = document.getElementById('messages');
+
+        function connect() {
+            const token = document.getElementById('token').value.trim();
+            if (!token) return alert('Please enter a token');
+
+            if (socket) socket.disconnect();
+
+            // Connect to /chat namespace
+            socket = io('http://localhost:5050/chats', {
+                auth: { token: token }
+            });
+
+            socket.on('connect', () => {
+                statusDiv.innerText = 'Status: Connected (ID: ' + socket.id + ')';
+                statusDiv.style.color = 'green';
+            });
+
+            socket.on('disconnect', () => {
+                statusDiv.innerText = 'Status: Disconnected';
+                statusDiv.style.color = 'red';
+            });
+
+            socket.on('connect_error', (err) => {
+                statusDiv.innerText = 'Status: Connection Error - ' + err.message;
+                statusDiv.style.color = 'red';
+            });
+
+            // Listen for new messages
+            socket.on('new-message', (data) => {
+                appendMessage(data, 'received');
+            });
+        }
+
+        function sendMessage() {
+            const roomId = parseInt(document.getElementById('roomId').value);
+            const message = document.getElementById('msgInput').value;
+            
+            if (!socket || !socket.connected) return alert('Connect first');
+            if (!roomId || !message) return alert('Enter Room ID and Message');
+
+            const payload = {
+                roomId: roomId,
+                message: message
+            };
+
+            socket.emit('send-message', payload);
+            document.getElementById('msgInput').value = '';
+            
+            // Note: We don't append locally here because we listen for 'new-message' 
+            // from the server which broadcasts to everyone (including the sender in current implementation)
+        }
+
+        function appendMessage(data, type) {
+            const div = document.createElement('div');
+            div.className = 'message ' + type;
+            // Format: sender (time): message
+            const time = new Date(data.createdAt).toLocaleTimeString();
+            const sender = data.sender?.username || data.senderId || 'Unknown';
+            div.innerHTML = `<strong>${sender}:</strong> ${data.message} <br><small>${time}</small>`;
+            messagesDiv.appendChild(div);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        }
+    </script>
+</body>
+</html>

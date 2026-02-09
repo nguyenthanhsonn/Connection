@@ -1,0 +1,80 @@
+openapi: 3.0.0
+info:
+  title: My API
+  version: 1.0.0
+  description: API documentation cho hệ thống Auth
+
+servers:
+  - url: http://localhost:5050
+
+paths:
+  /user/register:
+    post:
+      tags:
+        - User
+      summary: Đăng ký tài khoản mới
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterDto'
+      responses:
+        '201':
+          description: Tạo tài khoản thành công
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RegisterResponseDto'
+        '409':
+          description: Email đã tồn tại
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  statusCode:
+                    type: integer
+                    example: 409
+                  message:
+                    type: string
+                    example: Email đã tồn tại
+                  error:
+                    type: string
+                    example: Conflict
+
+components:
+  schemas:
+    RegisterDto:
+      type: object
+      required:
+        - email
+        - password
+      properties:
+        email:
+          type: string
+          example: abc@example.com
+        password:
+          type: string
+          example: 123456
+    RegisterResponseInterface:
+      type: object
+      properties:
+        message:
+          type: string
+          example: Tạo tài khoản thành công
+        id:
+          type: integer
+          example: 1
+        email:
+          type: string
+          example: abc@example.com
+        userName:
+          type: string
+          example: user_ab12
+        avatarUrl:
+          type: string
+          example: ''
+        bioText:
+          type: string
+          example: ''
