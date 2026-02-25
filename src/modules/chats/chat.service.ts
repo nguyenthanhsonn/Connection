@@ -134,7 +134,7 @@ export class ChatService {
                     roomName: room.name || (room.type === 'PERSONAL' && partner ? partner.userName : 'Unknown Room'),
                     partner: partner ? {
                         id: partner.id,
-                        username: partner.userName,
+                        userName: partner.userName,
                         avatarUrl: partner.avatarUrl
                     } : null,
                     lastMessage: lastMsg ? {

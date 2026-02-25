@@ -5,7 +5,7 @@ class PartnerDto {
     id: number;
 
     @Expose()
-    username: string;
+    userName: string;
 
     @Expose()
     avatarUrl: string;
