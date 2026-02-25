@@ -8,9 +8,9 @@ export class ChatController {
         private readonly chatService: ChatService
     ) { }
 
-    @Get()
+    @Get('list')
     @UseGuards(JwtAuthGuard)
-    async displayChatLast(@Req() req){
-        return this.chatService.displayListChatLast(req.user.id);
+    async getChatList(@Req() req) {
+        return this.chatService.getChatList(req.user.id);
     }
 }

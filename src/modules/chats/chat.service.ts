@@ -7,6 +7,8 @@ import { GetChatDto } from "./dto/get-chat.dto";
 import { ChatResponseDto } from "./dto/chat-response.dto";
 import { Users } from "src/entities/users.entity";
 import { Room } from "src/entities/room.entity";
+import { LastChatResponseDto } from "./dto/last-chat-response.dto";
+
 
 @Injectable()
 export class ChatService {
@@ -72,26 +74,41 @@ export class ChatService {
         }));
     }
 
+
     /**
-     * Hiển thị danh sách các cuộc hội thoại gần nhất của User
-     * @param userId ID của người dùng hiện tại
-     * @returns Danh sách chứa thông tin người chat cùng và tin nhắn cuối cùng
+     * Lấy danh sách các cuộc hội thoại của User
+     * Bao gồm cả các phòng mới được tạo nhưng chưa có tin nhắn (để hiển thị danh sách người mới follow/chat)
+     * Sắp xếp theo tin nhắn mới nhất, nếu chưa có tin nhắn thì xếp theo thời gian tạo phòng
      */
-    async displayListChatLast(userId: number): Promise<any[]> {
+    async getChatList(userId: number): Promise<LastChatResponseDto[]> {
         // perf-optimize-database: Sử dụng QueryBuilder để lấy phòng và thành viên một cách tối ưu
         const userRooms = await this.roomRepository
             .createQueryBuilder('room')
             .innerJoin('room.members', 'checkMember', 'checkMember.id = :userId', { userId })
             .leftJoinAndSelect('room.members', 'members')
+            .select([
+                'room.id',
+                'room.name',
+                'room.type',
+                'room.createdAt',
+                'members.id',
+                'members.userName',
+                'members.avatarUrl'
+            ])
             .getMany();
 
         if (!userRooms.length) return [];
 
         const roomIds = userRooms.map(r => r.id);
 
-        // Thay vì N+1 queries, ta lấy tin nhắn cuối của tất cả phòng trong 1 query duy nhất
+        // db-avoid-n-plus-one: Lấy tin nhắn cuối của tất cả các phòng trong 1 query
         const latestMessages = await this.chatRepository
             .createQueryBuilder('chat')
+            .select([
+                'chat.message',
+                'chat.createdAt',
+                'chat.roomId'
+            ])
             .where((qb) => {
                 const subQuery = qb
                     .subQuery()
@@ -106,7 +123,7 @@ export class ChatService {
 
         const messageMap = new Map(latestMessages.map(m => [m.roomId, m]));
 
-        // Tạo danh sách kết quả
+        // Tạo danh sách kết quả và sắp xếp
         return userRooms
             .map((room) => {
                 const partner = room.members.find(m => m.id !== userId);
@@ -114,7 +131,7 @@ export class ChatService {
 
                 return {
                     roomId: room.id,
-                    roomName: room.name,
+                    roomName: room.name || (room.type === 'PERSONAL' && partner ? partner.userName : 'Unknown Room'),
                     partner: partner ? {
                         id: partner.id,
                         username: partner.userName,
@@ -123,10 +140,13 @@ export class ChatService {
                     lastMessage: lastMsg ? {
                         content: lastMsg.message,
                         createdAt: lastMsg.createdAt
-                    } : null
+                    } : null,
+                    // Trường ảo để phục vụ việc sắp xếp
+                    _updatedAt: lastMsg ? lastMsg.createdAt.getTime() : room.createdAt.getTime()
                 };
             })
-            .filter(item => item.lastMessage !== null) // Chỉ lấy các phòng đã có hội thoại
-            .sort((a, b) => b.lastMessage!.createdAt.getTime() - a.lastMessage!.createdAt.getTime()); // Sắp xếp theo mới nhất
+            // Sắp xếp: Ưu tiên tin nhắn mới nhất, sau đó đến phòng mới tạo nhất
+            .sort((a, b) => b._updatedAt - a._updatedAt)
+            .map(({ _updatedAt, ...rest }) => rest as LastChatResponseDto);
     }
 }
